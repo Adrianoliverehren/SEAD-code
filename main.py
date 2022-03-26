@@ -1,3 +1,5 @@
+from tkinter import wantobjects
+from winsound import PlaySound
 from wsgiref import validate
 import pandas as pd
 import numpy as np
@@ -16,8 +18,6 @@ for index, row in df2.iterrows():
 
 lbs_kg = 0.45359237
 ft_m = 0.3048
-
-# print(xcg_loc)
 
 vals["W_wing"] = 2 * 0.0051 * ((vals["W_dg"] * vals["N_z"]) ** 0.557) * (vals["S_w"] ** 0.649) * \
     (vals["A"] ** 0.5) * (vals["t_root"]/vals["c_root"]) ** -0.4 * \
@@ -91,35 +91,27 @@ for id in OEW_ids:
 
 def find_x_cg_oew(vals, xcg_loc):
     x_weight = 0
+    xc_weight = 0
     weight_sum = 0
     for id in OEW_ids:
+        xc_weight += vals[id] * xcg_loc[id][1]
         x_weight += vals[id] * xcg_loc[id][1]
         weight_sum += vals[id]
 
     x_cg = x_weight / weight_sum
+    xc_cg = xc_weight / weight_sum
 
-    return x_cg
+    return x_cg, xc_cg
 
-def potato_diagram(x_cg_oew, vals, xcg_loc):
+def potato_diagram(xc_cg_oew, vals, xcg_loc, order):
+    dirs = ["front", "af"]
+    cargo = {"front": "W_front_cargo", "aft": "W_aft_cargo"}
     data = {}
-    print(xcg_loc["W_front_cargo"][1])
-    #adding cargo
-    x_cg_W = x_cg_oew * vals["W_empty_calculated"]
-    x_cg = (x_cg_W + xcg_loc["W_front_cargo"][1] * vals["W_front_cargo"]) /\
-        (vals["W_front_cargo"] + vals["W_empty_calculated"])
-    data["front cargo"] = [x_cg_oew, x_cg]
-    x_cg = (x_cg_W + xcg_loc["W_aft_cargo"][1] * vals["W_aft_cargo"]) /\
-        (vals["W_aft_cargo"] + vals["W_empty_calculated"])
-    data["aft cargo"] = [x_cg_oew, x_cg]
-    x_cg = (x_cg_W + xcg_loc["W_aft_cargo"][1] * vals["W_aft_cargo"]+ xcg_loc["W_front_cargo"][1] * vals["W_front_cargo"]) /\
-        (vals["W_front_cargo"] + vals["W_aft_cargo"] + vals["W_empty_calculated"])
-    data["front cargo"].append(x_cg)
-    data["aft cargo"].append(x_cg)
-
-    print(data)
-
-
-
+    for dir in dirs:
+        data[dir] = []
+        data[dir].append(xc_cg_oew)
+    def cargo(start_weight, start_xc_cg):
+        
 
     pass
 
