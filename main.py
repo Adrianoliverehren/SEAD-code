@@ -1,6 +1,4 @@
-from tkinter import wantobjects
-from winsound import PlaySound
-from wsgiref import validate
+from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
 df_ex = pd.ExcelFile("data.xlsx")
@@ -9,9 +7,11 @@ df2 = df_ex.parse("x_locations")
 
 vals = {}
 xcg_loc = {}
+vals_si = {}
 
 for index, row in df1.iterrows():
     vals[row["item"]] = row["value"]
+    vals_si[row["item"]] = row["value_SI"]
 
 for index, row in df2.iterrows():
     xcg_loc[row["Item"]] = [row["x_cg (from the nose) [m]"], row["x_cg/mac [-]"]]
@@ -84,18 +84,13 @@ vals["W_empty_calculated"] = 0
 for id in OEW_ids:
     vals["W_empty_calculated"] += vals[id]
 
-#print(vals["W_empty_calculated"] * lbs_kg, vals["W_oew"] * lbs_kg)
-#print((vals["W_empty_calculated"] * lbs_kg - vals["W_oew"] * lbs_kg) / (vals["W_oew"] * lbs_kg) * 100)
-
-
-
 def find_x_cg_oew(vals, xcg_loc):
     x_weight = 0
     xc_weight = 0
     weight_sum = 0
     for id in OEW_ids:
         xc_weight += vals[id] * xcg_loc[id][1]
-        x_weight += vals[id] * xcg_loc[id][1]
+        x_weight += vals[id] * xcg_loc[id][0]
         weight_sum += vals[id]
 
     x_cg = x_weight / weight_sum
@@ -103,21 +98,199 @@ def find_x_cg_oew(vals, xcg_loc):
 
     return x_cg, xc_cg
 
-def potato_diagram(xc_cg_oew, vals, xcg_loc, order):
-    dirs = ["front", "af"]
-    cargo = {"front": "W_front_cargo", "aft": "W_aft_cargo"}
-    data = {}
-    for dir in dirs:
-        data[dir] = []
-        data[dir].append(xc_cg_oew)
-    def cargo(start_weight, start_xc_cg):
-        
+def potato_diagram(xc_cg_oew, vals, xcg_loc):
+    # front cargo
+    front_cargo_data = [[],[]] #W, xc_cg
+    aft_cargo_data = [[],[]] #W, xc_cg
+    front_cargo_data[0].append(vals["W_empty_calculated"] * lbs_kg)
+    front_cargo_data[1].append(xc_cg_oew)
+    aft_cargo_data[0].append(vals["W_empty_calculated"] * lbs_kg)
+    aft_cargo_data[1].append(xc_cg_oew)
+
+    # only front cargo
+    new_mass = vals["W_empty_calculated"] + vals["W_front_cargo"]
+    front_cargo_data[0].append(new_mass * lbs_kg)
+    new_xc_cg = ((vals["W_empty_calculated"] * xc_cg_oew + \
+        vals["W_front_cargo"] * xcg_loc["W_front_cargo"][1]) / new_mass)
+    front_cargo_data[1].append(new_xc_cg)
+
+    # only rear cargo
+    new_mass = vals["W_empty_calculated"] + vals["W_aft_cargo"]
+    aft_cargo_data[0].append(new_mass * lbs_kg)
+    new_xc_cg = ((vals["W_empty_calculated"] * xc_cg_oew + \
+        vals["W_aft_cargo"] * xcg_loc["W_aft_cargo"][1]) / new_mass)
+    aft_cargo_data[1].append(new_xc_cg)
+
+    # front and rear cargo
+    final_mass = vals["W_empty_calculated"] + vals["W_aft_cargo"] + vals["W_front_cargo"]
+    aft_cargo_data[0].append(final_mass * lbs_kg)
+    front_cargo_data[0].append(final_mass * lbs_kg)
+    final_xc_cg = ((vals["W_empty_calculated"] * xc_cg_oew + \
+        vals["W_aft_cargo"] * xcg_loc["W_aft_cargo"][1] + vals["W_front_cargo"] * xcg_loc["W_front_cargo"][1]) / final_mass)
+    aft_cargo_data[1].append(final_xc_cg)
+    front_cargo_data[1].append(final_xc_cg)
+
+    after_cargo_cg = final_xc_cg
+    after_cargo_mass = final_mass * lbs_kg
+    
+    def wind_front_back(after_cargo_cg, after_cargo_mass):
+    #add people Window - front to back  
+        new_x_cg = after_cargo_cg
+        current_mass = after_cargo_mass
+        data_wind_front_back = [[],[]]
+            
+        data_wind_front_back[0].append(current_mass)
+        data_wind_front_back[1].append(new_x_cg)
+            
+
+        for i in range(25):
+            current_row_pos = xcg_loc["front_seat"][1] + i * xcg_loc["d_row"][1]
+            mass_before_wind_add = after_cargo_mass + 2*i * vals_si["W_person"]
+            
+            current_mass += 2 * vals_si["W_person"]
+
+            new_x_cg = (current_row_pos * 2 * vals_si["W_person"] + new_x_cg * mass_before_wind_add) / (current_mass)
+            
+            data_wind_front_back[0].append(current_mass)
+            data_wind_front_back[1].append(new_x_cg)
+
+        return data_wind_front_back
+
+    def wind_back_front(after_cargo_cg, after_cargo_mass):
+    #add people Window - front to back  
+        new_x_cg = after_cargo_cg
+        current_mass = after_cargo_mass
+        data_wind_back_front = [[],[]]
+            
+        data_wind_back_front[0].append(current_mass)
+        data_wind_back_front[1].append(new_x_cg)
+            
+
+        for i in range(25):
+            current_row_pos = xcg_loc["aft_seat"][1] - i * xcg_loc["d_row"][1]
+            mass_before_wind_add = after_cargo_mass + 2*i * vals_si["W_person"]
+            current_mass += 2 * vals_si["W_person"]
+            new_x_cg = (current_row_pos * 2 * vals_si["W_person"] + new_x_cg * mass_before_wind_add)/ (current_mass)
+            
+            data_wind_back_front[0].append(current_mass)
+            data_wind_back_front[1].append(new_x_cg)    
+
+        return data_wind_back_front
+
+    def aisle_front_back(after_cargo_cg, after_cargo_mass):
+    #add people ailse - front to back  
+        new_x_cg = after_cargo_cg
+        current_mass = after_cargo_mass
+        data_aisle_front_back = [[],[]]
+            
+        data_aisle_front_back[0].append(current_mass)
+        data_aisle_front_back[1].append(new_x_cg)
+            
+
+        for i in range(25):
+            current_row_pos = xcg_loc["front_seat"][1] + i * xcg_loc["d_row"][1]
+            mass_before_aisle_add = after_cargo_mass + 2*i * vals_si["W_person"]
+            
+            current_mass += 2 * vals_si["W_person"]
+
+            new_x_cg = (current_row_pos * 2 * vals_si["W_person"] + new_x_cg * mass_before_aisle_add) / (current_mass)
+            
+            data_aisle_front_back[0].append(current_mass)
+            data_aisle_front_back[1].append(new_x_cg)
+
+        return data_aisle_front_back
+
+    def aisle_back_front(after_cargo_cg, after_cargo_mass):
+    #add people aisle - front to back  
+        new_x_cg = after_cargo_cg
+        current_mass = after_cargo_mass
+        data_aisle_back_front = [[],[]]
+            
+        data_aisle_back_front[0].append(current_mass)
+        data_aisle_back_front[1].append(new_x_cg)
+            
+
+        for i in range(25):
+            current_row_pos = xcg_loc["aft_seat"][1] - i * xcg_loc["d_row"][1]
+            mass_before_aisle_add = after_cargo_mass + 2*i * vals_si["W_person"]
+            current_mass += 2 * vals_si["W_person"]
+            new_x_cg = (current_row_pos * 2 * vals_si["W_person"] + new_x_cg * mass_before_aisle_add)/ (current_mass)
+            
+            data_aisle_back_front[0].append(current_mass)
+            data_aisle_back_front[1].append(new_x_cg)    
+
+        return data_aisle_back_front
+
+    # def add_power_juice(start_mass, start_x_cg):
+
+    data_wind_front_back = wind_front_back(after_cargo_cg, after_cargo_mass)
+    data_wind_back_front = wind_back_front(after_cargo_cg, after_cargo_mass)
+    data_aisle_front_back = aisle_front_back(data_wind_back_front[1][-1], data_wind_back_front[0][-1])
+    data_aisle_back_front = aisle_back_front(data_wind_back_front[1][-1], data_wind_back_front[0][-1])
+
+    # adding fuel
+
+    power_juice_data = [[],[]]
+    power_juice_data[0].append(data_aisle_back_front[0][-1])
+    power_juice_data[1].append(data_aisle_back_front[1][-1])
+
+    new_cg = (data_aisle_back_front[1][-1] * data_aisle_back_front[0][-1] + vals_si["W_fuel_max"] * xcg_loc["W_fuel"][1]) / (data_aisle_back_front[0][-1] + vals_si["W_fuel_max"])
+    new_weight = data_aisle_back_front[0][-1] + vals_si["W_fuel_max"]
+
+    power_juice_data[0].append(new_weight)
+    power_juice_data[1].append(new_cg)
+
+    all_cgs = power_juice_data[1] + data_aisle_back_front[1] + data_aisle_front_back[1] + data_wind_back_front[1] + data_wind_front_back[1] +\
+        aft_cargo_data[1] + front_cargo_data[1]
+
+    min_cg = min(all_cgs)
+    max_cg = max(all_cgs)
+    min_cg = min_cg * 1.02
+    max_cg = max_cg * 1.02
+
+    print("MAX C.G. position is: " + str(max_cg))
+    print("MIN C.G. position is: " + str(min_cg))
+
+# x_seat_front
+# x_seat_aft
+# d_row
+
+
+    #add people Window - back to front   
+    
+
+    #cargo lines added
+    plt.plot(front_cargo_data[1], front_cargo_data[0], label="front cargo", marker='o')
+    plt.plot(aft_cargo_data[1], aft_cargo_data[0], label="aft cargo", marker='o')
+    
+    # window potato added
+    plt.plot(data_wind_front_back[1], data_wind_front_back[0], label="window seats front first", marker='o')
+    plt.plot(data_wind_back_front[1], data_wind_back_front[0], label="window seats aft first", marker='o')
+
+    # aisle potato added
+    plt.plot(data_aisle_front_back[1], data_aisle_front_back[0], label="ailse seats front first", marker='o')
+    plt.plot(data_aisle_back_front[1], data_aisle_back_front[0], label="ailse seats aft first", marker='o')
+    
+    # adding power juice
+    plt.plot(power_juice_data[1], power_juice_data[0], label="fuel", marker='o')
+
+    plt.vlines(min_cg, ymin=21974, ymax=vals_si["W_mtow"])
+    plt.vlines(max_cg, ymin=21974, ymax=vals_si["W_mtow"])
+
+    plt.plot
+    plt.legend()
+    plt.ylabel("mass [kg]")
+    plt.xlabel("x_cg [mac]")
+    plt.ylim(21974)
+    plt.grid(True)
+
+    plt.show()
 
     pass
 
 
+x_cg_oew, xc_cg_oew = find_x_cg_oew(vals, xcg_loc)
 
-x_cg_oew = find_x_cg_oew(vals, xcg_loc)
-print(x_cg_oew)
-potato_diagram(x_cg_oew, vals, xcg_loc)
+
+potato_diagram(xc_cg_oew, vals, xcg_loc)
         
